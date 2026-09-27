@@ -1,16 +1,21 @@
-import { useEffect, useRef, useSyncExternalStore, type PointerEvent, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/game/Logo";
+import { TouchControls } from "@/components/game/TouchControls";
 import { Game } from "@/game/game";
 import { getHud, subscribeHud } from "@/game/hud";
-import { setTouch } from "@/game/input";
 import { unlockAudio } from "@/game/audio";
+import { loadSave, writeSave, type ControlLayout } from "@/game/save";
 
 export function StarSwarm() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<Game | null>(null);
   const hud = useSyncExternalStore(subscribeHud, getHud, getHud);
+  const [controls, setControls] = useState<ControlLayout>({});
+
+  // Saved layout is read after mount: localStorage isn't available during SSR.
+  useEffect(() => setControls(loadSave().controls), []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -29,11 +34,21 @@ export function StarSwarm() {
     gameRef.current?.beginRun();
   };
 
-  const hold = (part: "left" | "right" | "fire", down: boolean) => (e: PointerEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    if (down) e.currentTarget.setPointerCapture(e.pointerId);
-    setTouch(part, down);
+  const saveControls = (next: ControlLayout) => {
+    setControls(next);
+    writeSave({ controls: next });
   };
+
+  // Only offered once a tile has been moved, and only where the touch controls show.
+  const resetLink = Object.keys(controls).length > 0 && (
+    <button
+      type="button"
+      className="touch-bar text-xs text-subtle underline underline-offset-4 md:hidden"
+      onClick={() => saveControls({})}
+    >
+      Reset controls
+    </button>
+  );
 
   return (
     <div className="flex h-dvh flex-col bg-bg text-fg overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
@@ -103,6 +118,7 @@ export function StarSwarm() {
               Start
             </Button>
             <p className="text-xs text-subtle">A / D or arrows to move · Space to fire</p>
+            {resetLink}
           </Overlay>
         )}
 
@@ -123,6 +139,7 @@ export function StarSwarm() {
             <Button size="lg" onClick={() => gameRef.current?.togglePause()}>
               Resume
             </Button>
+            {resetLink}
           </Overlay>
         )}
 
@@ -138,45 +155,17 @@ export function StarSwarm() {
         )}
       </div>
 
-      <div className="touch-bar grid grid-cols-3 gap-3 px-4 pb-4 pt-2 shrink-0 md:hidden">
-        <Button
-          variant="subtle"
-          size="touch"
-          aria-label="Move left"
-          onPointerDown={hold("left", true)}
-          onPointerUp={hold("left", false)}
-          onPointerCancel={hold("left", false)}
-        >
-          <ChevronLeft className="size-6" />
-        </Button>
-        <Button
-          variant="outline"
-          size="touch"
-          aria-label="Fire"
-          onPointerDown={hold("fire", true)}
-          onPointerUp={hold("fire", false)}
-          onPointerCancel={hold("fire", false)}
-        >
-          Fire
-        </Button>
-        <Button
-          variant="subtle"
-          size="touch"
-          aria-label="Move right"
-          onPointerDown={hold("right", true)}
-          onPointerUp={hold("right", false)}
-          onPointerCancel={hold("right", false)}
-        >
-          <ChevronRight className="size-6" />
-        </Button>
-      </div>
+      {/* Reserves the strip the touch controls sit in by default; the controls float above it. */}
+      <div className="touch-bar h-20 shrink-0 md:hidden" aria-hidden />
+
+      <TouchControls layout={controls} onLayoutChange={saveControls} />
     </div>
   );
 }
 
 function Overlay({ children }: { children: ReactNode }) {
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-bg/70 px-6">
+    <div className="absolute inset-0 z-20 flex items-center justify-center bg-bg/70 px-6">
       <div className="overlay-enter flex w-full max-w-sm flex-col items-center gap-5 rounded-[var(--radius-xl)] border border-border bg-surface p-8 text-center">
         {children}
       </div>

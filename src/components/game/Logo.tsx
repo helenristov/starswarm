@@ -11,10 +11,14 @@ const SWARM: [number, number, string][] = [
   [252, 44, "#f5b83d"],
 ];
 
+/** `top` is the line's em box top (baseline − 53.9 at this size), where its chrome gradient starts. */
 const LINES = [
-  { text: "STAR", y: 100, width: 226 },
-  { text: "SWARMS", y: 158, width: 330 },
+  { text: "STAR", y: 100, width: 226, top: 46.1 },
+  { text: "SWARMS", y: 158, width: 330, top: 104.1 },
 ];
+const LINE_HEIGHT = 70.2;
+/** Where one line's gradient band hands over to the next: between STAR's baseline (100) and SWARMS' cap tops (~116). */
+const SPLIT_Y = 108;
 
 export function Logo({ className }: { className?: string }) {
   const id = useId().replace(/:/g, "");
@@ -22,6 +26,7 @@ export function Logo({ className }: { className?: string }) {
   const clip = `${id}-clip`;
   const glow = `${id}-glow`;
   const shine = `${id}-shine`;
+  const mask = `${id}-mask`;
 
   // Fixed widths keep the lockup identical whatever the font's metrics.
   const words = LINES.map(({ text, y, width }) => (
@@ -33,22 +38,40 @@ export function Logo({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 360 176" role="img" aria-label="Star Swarms" className={className}>
       <defs>
-        {/* Chrome top, hard horizon, molten bottom — classic arcade marquee. */}
-        <linearGradient id={fill} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#ffffff" />
-          <stop offset="0.46" stopColor="#a9efff" />
-          <stop offset="0.5" stopColor="#2b5f9e" />
-          <stop offset="0.54" stopColor="#ff8a3d" />
-          <stop offset="1" stopColor="#ffe08a" />
-        </linearGradient>
+        {/* Chrome top, hard horizon, molten bottom — classic arcade marquee. One per line. */}
+        {LINES.map((line, i) => (
+          <linearGradient
+            key={line.text}
+            id={`${fill}-${i}`}
+            gradientUnits="userSpaceOnUse"
+            x1="0"
+            y1={line.top}
+            x2="0"
+            y2={line.top + LINE_HEIGHT}
+          >
+            <stop offset="0" stopColor="#ffffff" />
+            <stop offset="0.46" stopColor="#a9efff" />
+            <stop offset="0.5" stopColor="#2b5f9e" />
+            <stop offset="0.54" stopColor="#ff8a3d" />
+            <stop offset="1" stopColor="#ffe08a" />
+          </linearGradient>
+        ))}
         <linearGradient id={shine} x1="0" y1="0" x2="1" y2="0">
           <stop offset="0" stopColor="#fff" stopOpacity="0" />
           <stop offset="0.5" stopColor="#fff" stopOpacity="0.85" />
           <stop offset="1" stopColor="#fff" stopOpacity="0" />
         </linearGradient>
-        <filter id={glow} x="-20%" y="-30%" width="140%" height="160%">
+        <filter id={glow} filterUnits="userSpaceOnUse" x="-20" y="20" width="400" height="176">
           <feGaussianBlur stdDeviation="5" />
         </filter>
+        {/* The face is gradient rectangles masked by plain white text, not gradient-filled
+            text: WebKit (every iOS browser) clips gradient-filled text that uses textLength to
+            a mis-measured box, cutting off each line's first and last letters. */}
+        <mask id={mask} maskUnits="userSpaceOnUse" x="0" y="0" width="360" height="176">
+          <g className="logo-type" fill="#fff">
+            {words}
+          </g>
+        </mask>
         <clipPath id={clip}>
           <g className="logo-type">{words}</g>
         </clipPath>
@@ -89,8 +112,12 @@ export function Logo({ className }: { className?: string }) {
         <g fill="#07080c" stroke="#07080c" strokeWidth="3" strokeLinejoin="round">
           {words}
         </g>
-        {/* Face */}
-        <g fill={`url(#${fill})`}>{words}</g>
+      </g>
+
+      {/* Face: each line's gradient band, split between the lines, shown through the text mask */}
+      <g mask={`url(#${mask})`}>
+        <rect x="0" y="0" width="360" height={SPLIT_Y} fill={`url(#${fill}-0)`} />
+        <rect x="0" y={SPLIT_Y} width="360" height={176 - SPLIT_Y} fill={`url(#${fill}-1)`} />
       </g>
 
       {/* Light sweep, clipped to the letters */}
